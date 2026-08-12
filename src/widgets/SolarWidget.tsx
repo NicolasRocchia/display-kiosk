@@ -10,6 +10,8 @@ const POLL_MS = 60 * 1000
 const IDLE_W = 10
 /** importación sostenida que enciende el marco ámbar */
 const TONE_IMPORT_W = 150
+/** ruido alrededor de cero: por debajo, hablar de dirección del flujo es ficción */
+const GRID_NOISE_W = 25
 /** el inversor sube datos cada ~5 min; pasado esto se muestra aviso */
 const UPLOAD_STALE_MIN = 15
 
@@ -78,6 +80,7 @@ export function SolarWidget() {
 function SolarGrid({ data }: { data: SolarData }) {
   const generating = data.acPowerW >= IDLE_W
   const gridW = Math.abs(data.feedInPowerW)
+  const exporting = data.feedInPowerW > GRID_NOISE_W
 
   // Fila protagonista: paneles → casa (mismo tamaño); debajo: red y %.
   // Tinte sutil: verde en paneles, ámbar en red — se distinguen de un vistazo.
@@ -101,9 +104,10 @@ function SolarGrid({ data }: { data: SolarData }) {
         <div className="stat__label">casa</div>
       </div>
       <div className="flow__node">
-        {/* valor crudo: así paneles + red = casa cierra a simple vista */}
+        {/* valor crudo, sin umbral de ruido: así la cuenta cierra a simple vista */}
         <div className="flow__value flow__value--grid">{fmtPower(gridW)}</div>
-        <div className="stat__label">red</div>
+        {/* la etiqueta lleva la dirección: sin ella, exportar e importar se ven igual */}
+        <div className="stat__label">{exporting ? 'a la red' : 'de la red'}</div>
       </div>
       {data.solarSharePct != null && (
         <div className="flow__node">
@@ -128,8 +132,11 @@ function Sparkline({ series }: { series: SeriesPoint[] }) {
   const maxW = Math.max(100, ...series.map((p) => p.w))
   const x = (m: number) => ((m - startM) / spanM) * 288
   const y = (w: number) => 40 - (w / maxW) * 38
-  const line = series.map((p) => `${x(p.m).toFixed(1)},${y(p.w).toFixed(1)}`).join(' ')
-  const area = `M${x(first.m).toFixed(1)},40 L${line.replaceAll(' ', ' L')} L${x(last.m).toFixed(1)},40 Z`
+  // Sin String.replaceAll: los WebView viejos de Android (el hardware que este
+  // proyecto recicla) no lo implementan y el widget entero explotaría al dibujar.
+  const coords = series.map((p) => `${x(p.m).toFixed(1)},${y(p.w).toFixed(1)}`)
+  const line = coords.join(' ')
+  const area = `M${x(first.m).toFixed(1)},40 L${coords.join(' L')} L${x(last.m).toFixed(1)},40 Z`
 
   return (
     <svg className="sparkline" viewBox="0 0 288 40" preserveAspectRatio="none" role="img" aria-label="Generación del día">

@@ -33,7 +33,7 @@ export function ServicesWidget() {
         ) : (
           <ul className="services">
             {data.map((s) => (
-              <li key={s.url} className="services__item">
+              <li key={s.name} className="services__item">
                 {/* punto de color + texto: el estado nunca depende del color solo */}
                 <span className={`services__dot services__dot--${dotTone(s)}`} />
                 <span className="services__name">{s.name}</span>

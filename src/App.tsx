@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { WidgetBoundary } from './components/WidgetBoundary'
 import { registry } from './widgets/registry'
 
 // Anti burn-in AMOLED: todo el contenido se desplaza unos px siguiendo un ciclo lento.
@@ -29,7 +30,10 @@ function App() {
     <main className="dashboard" style={{ translate: `${x}px ${y}px` }}>
       {registry.map(({ id, area, Component }) => (
         <div key={id} className={`cell cell--${area}`} style={{ gridArea: area }}>
-          <Component />
+          {/* un widget que falla no puede llevarse puesta toda la pantalla */}
+          <WidgetBoundary>
+            <Component />
+          </WidgetBoundary>
         </div>
       ))}
     </main>
