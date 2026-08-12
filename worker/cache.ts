@@ -16,7 +16,7 @@ export interface CachedResult<T> {
 const memory = new Map<string, CacheEntry<unknown>>();
 const lastFailureAt = new Map<string, number>();
 /** consultas al upstream en curso, para no duplicarlas entre requests concurrentes */
-const inFlight = new Map<string, Promise<unknown>>();
+const inFlight = new Map<string, Promise<CacheEntry<unknown>>>();
 
 const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 const FAILURE_COOLDOWN_MS = 30_000;
@@ -83,11 +83,13 @@ export async function cachedFetch<T>(
   }
 
   try {
-    const data = await dedupe(id, fetcher);
-    memory.set(id, { data, updatedAt: now });
+    // El timestamp lo pone quien resuelve el fetch, no cada request: así todas
+    // las que comparten una consulta reportan la misma antigüedad real del dato.
+    const fresh = await dedupe(id, fetcher);
+    memory.set(id, fresh);
     lastFailureAt.delete(id);
-    await writePersistent(id, { data, updatedAt: now });
-    return { data, updatedAt: now, stale: false };
+    await writePersistent(id, fresh);
+    return { data: fresh.data, updatedAt: fresh.updatedAt, stale: false };
   } catch (err) {
     lastFailureAt.set(id, now);
     if (usable) {
@@ -102,12 +104,14 @@ export async function cachedFetch<T>(
  * Sin esto, N visitas simultáneas al vencer el TTL disparaban N consultas — con
  * una URL pública eso alcanza para pasarse del límite de la API del inversor.
  */
-function dedupe<T>(id: string, fetcher: () => Promise<T>): Promise<T> {
-  const running = inFlight.get(id) as Promise<T> | undefined;
+function dedupe<T>(id: string, fetcher: () => Promise<T>): Promise<CacheEntry<T>> {
+  const running = inFlight.get(id) as Promise<CacheEntry<T>> | undefined;
   if (running) {
     return running;
   }
-  const started = fetcher().finally(() => inFlight.delete(id));
+  const started = fetcher()
+    .then((data) => ({ data, updatedAt: Date.now() }))
+    .finally(() => inFlight.delete(id));
   inFlight.set(id, started);
   return started;
 }

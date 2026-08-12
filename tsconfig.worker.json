@@ -19,5 +19,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["worker", "shared", "worker-configuration.d.ts"]
+  "include": ["worker", "shared", "worker-configuration.d.ts"],
+  // Los tests corren en Node (`npm test`), no en el Worker: usan APIs y una
+  // resolución de imports que esta configuración no contempla.
+  "exclude": ["worker/**/*.test.ts"]
 }
