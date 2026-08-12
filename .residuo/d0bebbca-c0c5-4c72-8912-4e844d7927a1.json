@@ -1,0 +1,355 @@
+{
+  "esquema": "residuo/v0.1",
+  "perfil": "completo",
+  "evento": {
+    "id_evento": "d0bebbca-c0c5-4c72-8912-4e844d7927a1",
+    "creado_en": "2026-08-12T13:01:25-03:00",
+    "repositorio": "https://github.com/NicolasRocchia/display-kiosk.git",
+    "commit_cabeza": "08c81ae2e81373691b4f87579180abade9129ecd",
+    "compuerta": "diff",
+    "nivel_criticidad": "B",
+    "ruta_abreviada": {
+      "usada": false
+    },
+    "commit_base": "04e147bed8987d5f4d8d21ef304c85bd985423d3"
+  },
+  "actores": {
+    "generador": {
+      "familia": "anthropic",
+      "modelo": "claude-code"
+    },
+    "revisores": [
+      {
+        "id_revisor": "r1",
+        "familia": "openai",
+        "modelo": "gpt-5.6-sol",
+        "id_sesion": "019ff6a5-d2c1-7700-8e56-4baaf806670b",
+        "consigna_hash": "sha256:4dd7d18d9451d871b4dced13a1bebba66d3b251315fdd0fa716ec097da4861fc",
+        "confinamiento": {
+          "modo": "solo_lectura_por_instruccion",
+          "verificado": true,
+          "metodo_verificacion": "git_status_limpio"
+        }
+      }
+    ],
+    "arbitro_humano": {
+      "presente": true
+    }
+  },
+  "hallazgos": [
+    {
+      "id": "h1",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "La URL pública no tiene autenticación ni límite de tasa",
+      "descripcion": "Cualquiera que conozca la URL puede consumir las 100.000 requests diarias del plan gratuito y dejar el display sin servicio. /api/health y las rutas inválidas ni siquiera necesitan un upstream.",
+      "ubicacion": "worker/index.ts:20-28",
+      "estado_final": "decision_del_dueno",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: el router no aplica autenticación ni rate limiting. El riesgo es real pero la mitigación (Cloudflare Access o una regla de rate limiting) depende de cuánto le importe a cada quien deploya: para un display doméstico con URL no publicada el costo de un ataque es que el panel deje de verse hasta el día siguiente. Se documentó el riesgo y las dos mitigaciones en el README en vez de imponer una."
+      },
+      "registro_riesgo": "Riesgo aceptado: sin autenticación ni límite de tasa, quien conozca la URL puede agotar la cuota diaria y dejar el display sin servicio hasta el día siguiente. Se acepta para el caso doméstico (URL no publicada, nombre de Worker no adivinable) y se documentan en el README las dos mitigaciones disponibles —Cloudflare Access y reglas de límite de tasa— para quien necesite más."
+    },
+    {
+      "id": "h2",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "El cache no deduplica consultas concurrentes al upstream",
+      "descripcion": "Entre el fallo de cache y la escritura del resultado no había una promesa en vuelo compartida: N requests simultáneas al vencer el TTL disparaban N consultas, suficiente para pasar el límite de 100 req/min de la API del inversor.",
+      "ubicacion": "worker/cache.ts:57-89",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado leyendo cachedFetch: no existía registro de consultas en curso."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "prueba_especifica",
+        "referencia": "worker/cache.test.ts — 20 requests concurrentes producen exactamente 1 consulta al upstream"
+      }
+    },
+    {
+      "id": "h3",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "El frontend abre dos pollers independientes de /api/weather",
+      "descripcion": "WeatherWidget y ClockWidget consultan el clima por separado; en un arranque en frío ambos encuentran el cache vacío.",
+      "ubicacion": "src/widgets/WeatherWidget.tsx:12, src/widgets/ClockWidget.tsx:10",
+      "estado_final": "deuda_registrada",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: son dos llamadas a useWidgetData sobre el mismo endpoint. Con la deduplicación de h2 el impacto real quedó en una consulta al upstream (dos requests al Worker propio). Compartir el dato exigiría acoplar dos widgets que hoy son independientes por diseño del registro, y el beneficio no lo justifica todavía."
+      },
+      "id_deuda": "DEUDA-001 (README, sección de estado del proyecto): unificar el consumo de /api/weather entre el reloj y el clima"
+    },
+    {
+      "id": "h4",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "El token de Solax se renovaba ante cualquier error, no solo ante rechazo de autenticación",
+      "descripcion": "Un 429 por exceso de cuota descartaba el token válido, pedía otro y repetía la consulta ya limitada: la recuperación agravaba el incidente.",
+      "ubicacion": "worker/sources/solax.ts:148-151",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: el reintento se disparaba con cualquier respuesta distinta de código 10000."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "compuerta_diff",
+        "referencia": "El reintento quedó condicionado a HTTP 401/403; revisado en el diff y verificado que el display sigue obteniendo telemetría real en producción"
+      }
+    },
+    {
+      "id": "h5",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "El período de espera tras un fallo no protegía al upstream con cache frío",
+      "descripcion": "La condición del cooldown exigía además la existencia de un dato previo, así que durante una caída con cache vacío cada visita volvía a golpear al upstream.",
+      "ubicacion": "worker/cache.ts:72",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: la condición incluía `&& entry`."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "prueba_especifica",
+        "referencia": "worker/cache.test.ts — cinco llamadas seguidas con upstream caído y cache vacío producen un solo intento"
+      }
+    },
+    {
+      "id": "h6",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "/api/services publicaba las URLs monitoreadas",
+      "descripcion": "La respuesta incluía la URL completa de cada check. Es habitual que un health check lleve un token en la query o una ruta interna difícil de adivinar.",
+      "ubicacion": "worker/sources/services.ts:29",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "ejecucion",
+        "detalle": "Confirmado consultando el endpoint: la respuesta incluía el campo url."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "prueba_especifica",
+        "referencia": "Respuesta de /api/services tras el cambio: campos name, up, degraded, detail, httpStatus, latencyMs — sin url"
+      }
+    },
+    {
+      "id": "h7",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "MONITOR_URLS no valida protocolo, destino ni cantidad",
+      "descripcion": "No es un proxy abierto (el visitante no puede aportar URLs), pero una configuración descuidada convierte al Worker en una sonda fija hacia cualquier destino alcanzable desde Cloudflare, y la respuesta revela estado y latencia.",
+      "ubicacion": "worker/sources/services.ts:12-38",
+      "estado_final": "decision_del_dueno",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: no hay validación de esquema ni de host. El revisor mismo descarta el escenario remoto. Restringir destinos limitaría el uso legítimo (monitorear servicios propios en cualquier host), así que se documentó el comportamiento y la recomendación de no poner tokens en la query."
+      },
+      "registro_riesgo": "Riesgo aceptado: las URLs monitoreadas no se validan por esquema ni destino, porque restringirlas impediría el uso legítimo de vigilar servicios propios en cualquier host. Se documenta que las consulta la red de Cloudflare (no sirven para servicios de red local) y que no deben llevar credenciales en la query."
+    },
+    {
+      "id": "h8",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "Un dato con tipo inesperado dejaba toda la pantalla en negro",
+      "descripcion": "Los tipos de TypeScript no validan en tiempo de ejecución y no había límite de error alrededor de los widgets: un HTTP 200 con un número donde se esperaba texto rompía el render de la raíz, no solo del widget afectado.",
+      "ubicacion": "src/widgets/ClockWidget.tsx:8, src/App.tsx:30",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: ningún componente implementaba getDerivedStateFromError."
+      },
+      "ajuste_al_remedio": "El revisor proponía validación de esquema en tiempo de ejecución para cada respuesta. Se adoptó contención por widget (límite de error) en lugar de validación exhaustiva: cuesta una fracción y cubre también los datos inesperados que ninguna validación anticipe. La validación puntual de campos críticos queda disponible si aparece un caso concreto.",
+      "verificacion_de_la_correccion": {
+        "tipo": "compuerta_diff",
+        "referencia": "WidgetBoundary envuelve cada celda del tablero; verificado que el display renderiza normalmente y que un widget caído muestra su propio aviso"
+      }
+    },
+    {
+      "id": "h9",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "Las consultas del navegador no tenían tiempo límite",
+      "descripcion": "Una conexión a medio abrir dejaba la bandera de consulta en curso encendida para siempre: ni el intervalo ni los eventos de reconexión volvían a intentar, y el widget quedaba congelado hasta la recarga diaria.",
+      "ubicacion": "src/lib/api.ts:5, src/hooks/useWidgetData.ts:30",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: fetchWidget no pasaba señal de aborto, a diferencia de los fetch del Worker."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "compuerta_diff",
+        "referencia": "Tiempo límite de 15 s en fetchWidget; el display sigue actualizando con normalidad tras el cambio"
+      }
+    },
+    {
+      "id": "h10",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "El límite de 24 h del dato viejo se salteaba en la rama de espera",
+      "descripcion": "El camino del cooldown devolvía cualquier entrada sin comprobar su antigüedad máxima.",
+      "ubicacion": "worker/cache.ts:71-84",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado. La segunda parte del hallazgo (el cliente conserva el último dato bueno sin límite tras un 502) es intencional y se mantiene: en un display es preferible un dato viejo señalado como tal que una pantalla vacía."
+      },
+      "ajuste_al_remedio": "Se corrigió solo el lado del Worker. El comportamiento del cliente se deja como está, con la antigüedad siempre visible en pantalla.",
+      "verificacion_de_la_correccion": {
+        "tipo": "prueba_especifica",
+        "referencia": "worker/cache.test.ts — ante un fallo con dato previo se sirve el último bueno marcado como viejo"
+      }
+    },
+    {
+      "id": "h11",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "Telemetría congelada del inversor puede mostrarse como fresca",
+      "descripcion": "updatedAt refleja cuándo el Worker obtuvo la respuesta, no la marca de tiempo del inversor; y el aviso de atraso se oculta cuando la potencia es menor a 10 W.",
+      "ubicacion": "worker/sources/solax.ts:208, src/widgets/SolarWidget.tsx:144",
+      "estado_final": "deuda_registrada",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado. El aviso se oculta a propósito de noche, cuando el inversor se apaga y deja de reportar por diseño: distinguir 'apagado normal' de 'colgado' requiere lógica de horario solar. Queda anotado; el impacto es un aviso que falta, no un dato incorrecto."
+      },
+      "id_deuda": "DEUDA-002: distinguir inversor apagado por la noche de inversor colgado, usando la hora de puesta del sol"
+    },
+    {
+      "id": "h12",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "La zona horaria configurada no gobierna el reloj ni la serie del día",
+      "descripcion": "El Worker usa TIMEZONE; el reloj, la clave diaria de la serie y la curva del modo demo usan la zona del dispositivo Android.",
+      "ubicacion": "src/widgets/ClockWidget.tsx:20, src/lib/solarSeries.ts:34",
+      "estado_final": "deuda_registrada",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado. Solo se manifiesta si el teléfono está configurado en una zona distinta de la de la instalación, algo improbable en un display doméstico. Anotado para el caso de uso remoto."
+      },
+      "id_deuda": "DEUDA-003: hacer que TIMEZONE gobierne también el reloj y la serie diaria del cliente"
+    },
+    {
+      "id": "h13",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "La estación local aceptaba snapshots sin marca de tiempo legible",
+      "descripcion": "Si faltaban fecha u hora, la validación de frescura los daba por buenos, contradiciendo la promesa de descartar una estación colgada.",
+      "ubicacion": "worker/sources/stations/utnSanFrancisco.ts:63-67",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado: el retorno temprano aceptaba el snapshot."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "compuerta_diff",
+        "referencia": "Sin fecha legible se lanza error y el clima cae a Open-Meteo, que es la promesa documentada"
+      }
+    },
+    {
+      "id": "h14",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "El dispositivo descubierto se cachea sin invalidación",
+      "descripcion": "Siempre se elige el primer inversor devuelto y el identificador queda en memoria hasta un arranque en frío o un despliegue.",
+      "ubicacion": "worker/sources/solax.ts:155-170",
+      "estado_final": "deuda_registrada",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado. Afecta solo a cuentas con más de un inversor o a un cambio de equipo; el proyecto asume una instalación. Anotado junto con el soporte de baterías, que tampoco está implementado."
+      },
+      "id_deuda": "DEUDA-004: permitir elegir inversor e invalidar el descubrimiento cacheado; incluye el soporte de baterías, hoy no implementado"
+    },
+    {
+      "id": "h15",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "Los chequeos de servicios aceptan configuración inválida y pueden dar falsos positivos",
+      "descripcion": "Solo se valida que el JSON sea un arreglo; una página de estado que responda un objeto vacío se interpreta como sana, y un 3xx final se reporta caído pese a lo documentado.",
+      "ubicacion": "worker/sources/services.ts:12-61",
+      "estado_final": "deuda_registrada",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado en los tres puntos. El impacto es un semáforo impreciso en casos de borde de configuración propia, no un fallo del display. Anotado."
+      },
+      "id_deuda": "DEUDA-005: validar la forma de MONITOR_URLS y afinar el criterio de estado de los chequeos"
+    },
+    {
+      "id": "h16",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "El README pedía una versión de Node que no alcanza",
+      "descripcion": "Decía Node 20+, pero Vite 8 exige 20.19+ o 22.12+: alguien que siga las instrucciones al pie con Node 20.0 no puede instalar.",
+      "ubicacion": "README.md:37",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "ejecucion",
+        "detalle": "Confirmado leyendo el manifiesto de la versión de Vite instalada: requiere ^20.19.0 || >=22.12.0."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "prueba_especifica",
+        "referencia": "Clon limpio del repositorio publicado + instalación y compilación con Node 22.23: sin advertencias de compatibilidad"
+      }
+    },
+    {
+      "id": "h17",
+      "origen": "r1",
+      "severidad": "mayor",
+      "titulo": "El gráfico usaba una función de texto que los WebView viejos no implementan",
+      "descripcion": "String.replaceAll sin alternativa: en un WebView sin esa función, el widget solar lanzaba al llegar a la cuarta muestra del día. El proyecto existe justamente para reciclar teléfonos viejos, que son los que tienen ese WebView.",
+      "ubicacion": "src/widgets/SolarWidget.tsx:132",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado por búsqueda directa. El propio dueño había tenido problemas de compatibilidad con el WebView del teléfono días antes, lo que refuerza que el escenario no es teórico."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "compuerta_diff",
+        "referencia": "El trazado se arma con map y join; el gráfico se verificó dibujando la curva completa del día en modo demo"
+      }
+    },
+    {
+      "id": "h18",
+      "origen": "r1",
+      "severidad": "menor",
+      "titulo": "La interfaz no distinguía compra de venta de energía",
+      "descripcion": "Se mostraba el valor absoluto bajo la misma etiqueta, así que exportar e importar se veían idénticos.",
+      "ubicacion": "src/widgets/SolarWidget.tsx:103",
+      "estado_final": "incorporado",
+      "verificacion": {
+        "contra": "repositorio",
+        "detalle": "Confirmado. En la instalación del dueño (inyección cero) nunca se exporta, por eso no se había notado; en una instalación cualquiera es un dato equivocado."
+      },
+      "verificacion_de_la_correccion": {
+        "tipo": "compuerta_diff",
+        "referencia": "La etiqueta pasa a 'a la red' o 'de la red' según el signo, manteniendo el número sin signo"
+      }
+    }
+  ],
+  "residuo": {
+    "items": [
+      {
+        "id": "r1",
+        "clase": "gap_de_ejecucion",
+        "ref_hallazgo": "h2",
+        "requiere_atencion_humana": true,
+        "descripcion": "La deduplicación de consultas quedó verificada dentro de un mismo aislado de ejecución. En producción Cloudflare puede atender el tráfico con varios aislados en paralelo, cada uno con su propio registro de consultas en curso, de modo que el límite superior real de llamadas al upstream por minuto es el número de aislados activos y no uno. No se pudo arbitrar por ejecución: reproducirlo exige generar carga distribuida contra el despliegue real, algo que no se hizo. La corrección reduce el problema en el caso frecuente (una pantalla, un aislado caliente) pero no lo elimina globalmente.",
+        "motivo_gap": "entorno_no_reproduce"
+      }
+    ]
+  },
+  "metricas": {
+    "conteos": {
+      "total_hallazgos": 18,
+      "validos": {
+        "incorporado": 11,
+        "deuda_registrada": 5,
+        "decision_del_dueno": 2
+      },
+      "falsos_positivos": {
+        "refutado_verificable": 0,
+        "refutado_interpretativo": 0
+      },
+      "escalados_abiertos": 0
+    }
+  }
+}
