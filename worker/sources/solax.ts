@@ -145,11 +145,15 @@ async function apiGet<T>(env: Env, path: string, retried = false): Promise<T> {
   if (res.ok && body.code === 10000 && body.result !== undefined) {
     return body.result;
   }
-  if (!retried) {
+  // Solo se renueva el token ante un rechazo de autenticación. Reintentar ante
+  // cualquier error (un 429, por ejemplo) sumaba una llamada OAuth y repetía la
+  // consulta ya limitada: convertía un problema de cuota en uno peor.
+  const authRejected = res.status === 401 || res.status === 403;
+  if (authRejected && !retried) {
     tokenCache = null;
     return apiGet<T>(env, path, true);
   }
-  throw new Error(`SolaxCloud: ${body.message ?? `código ${body.code}`}`);
+  throw new Error(`SolaxCloud: ${body.message ?? `código ${body.code} (HTTP ${res.status})`}`);
 }
 
 async function ensureDevice(env: Env): Promise<{ deviceSn: string; plantId: string }> {

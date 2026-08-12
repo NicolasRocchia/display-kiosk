@@ -60,11 +60,18 @@ function parseNum(s: string | undefined): number | null {
 }
 
 // El snapshot trae "fecha" dd/MM/yy y "hora" H:mm en hora local de la estación.
+// Sin timestamp legible no se puede saber si el dato está vivo, así que se
+// rechaza: la promesa es "si la estación se cuelga, manda Open-Meteo", y aceptar
+// un snapshot sin fecha era justamente la forma de servir datos congelados.
 function assertFresh(raw: UtnRaw, timeZone: string): void {
-  if (!raw.fecha || !raw.hora) return; // sin timestamp no se puede juzgar: se acepta
+  if (!raw.fecha || !raw.hora) {
+    throw new Error("Estación UTN: snapshot sin fecha/hora, no se puede validar");
+  }
   const [d, m, y] = raw.fecha.split("/").map((p) => parseInt(p, 10));
   const [hh, mm] = raw.hora.split(":").map((p) => parseInt(p, 10));
-  if ([d, m, y, hh, mm].some((n) => !Number.isFinite(n))) return;
+  if ([d, m, y, hh, mm].some((n) => !Number.isFinite(n))) {
+    throw new Error("Estación UTN: fecha/hora ilegible, no se puede validar");
+  }
 
   // "ahora" en la zona de la estación, como minutos de un calendario naive
   const parts = new Intl.DateTimeFormat("en-CA", {

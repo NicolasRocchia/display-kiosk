@@ -26,7 +26,6 @@ export async function fetchServices(env: Env): Promise<ServicesData> {
 async function check(t: MonitorTarget): Promise<ServiceCheck> {
   const base: ServiceCheck = {
     name: t.name,
-    url: t.url,
     up: false,
     degraded: false,
     detail: null,

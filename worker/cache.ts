@@ -15,6 +15,8 @@ export interface CachedResult<T> {
 
 const memory = new Map<string, CacheEntry<unknown>>();
 const lastFailureAt = new Map<string, number>();
+/** consultas al upstream en curso, para no duplicarlas entre requests concurrentes */
+const inFlight = new Map<string, Promise<unknown>>();
 
 const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 const FAILURE_COOLDOWN_MS = 30_000;
@@ -67,23 +69,45 @@ export async function cachedFetch<T>(
     return { data: entry.data, updatedAt: entry.updatedAt, stale: false };
   }
 
-  // Tras un fallo reciente no se reintenta el upstream: se sirve stale directo.
+  const usable = entry && now - entry.updatedAt <= STALE_MAX_MS ? entry : undefined;
+
+  // Tras un fallo reciente no se toca el upstream: se sirve lo último bueno, y si
+  // no hay nada servible se corta acá. El cooldown vale aunque nunca haya habido
+  // dato: si no, durante una caída con cache frío cada visita golpea al upstream.
   const failedAt = lastFailureAt.get(id);
-  if (failedAt !== undefined && now - failedAt < FAILURE_COOLDOWN_MS && entry) {
-    return { data: entry.data, updatedAt: entry.updatedAt, stale: true };
+  if (failedAt !== undefined && now - failedAt < FAILURE_COOLDOWN_MS) {
+    if (usable) {
+      return { data: usable.data, updatedAt: usable.updatedAt, stale: true };
+    }
+    throw new Error("Upstream caído hace instantes; esperando antes de reintentar");
   }
 
   try {
-    const data = await fetcher();
+    const data = await dedupe(id, fetcher);
     memory.set(id, { data, updatedAt: now });
     lastFailureAt.delete(id);
     await writePersistent(id, { data, updatedAt: now });
     return { data, updatedAt: now, stale: false };
   } catch (err) {
     lastFailureAt.set(id, now);
-    if (entry && now - entry.updatedAt <= STALE_MAX_MS) {
-      return { data: entry.data, updatedAt: entry.updatedAt, stale: true };
+    if (usable) {
+      return { data: usable.data, updatedAt: usable.updatedAt, stale: true };
     }
     throw err;
   }
+}
+
+/**
+ * Una sola llamada al upstream por fuente aunque lleguen muchas requests juntas.
+ * Sin esto, N visitas simultáneas al vencer el TTL disparaban N consultas — con
+ * una URL pública eso alcanza para pasarse del límite de la API del inversor.
+ */
+function dedupe<T>(id: string, fetcher: () => Promise<T>): Promise<T> {
+  const running = inFlight.get(id) as Promise<T> | undefined;
+  if (running) {
+    return running;
+  }
+  const started = fetcher().finally(() => inFlight.delete(id));
+  inFlight.set(id, started);
+  return started;
 }

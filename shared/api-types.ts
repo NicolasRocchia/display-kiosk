@@ -97,7 +97,7 @@ export interface WeatherData {
 
 export interface ServiceCheck {
   name: string;
-  url: string;
+  /** La URL NO se publica: suele llevar tokens o rutas internas en la query. */
   up: boolean;
   /** true = responde pero con estado degradado (solo checks tipo statuspage) */
   degraded: boolean;
