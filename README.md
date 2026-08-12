@@ -34,7 +34,7 @@ Si una API externa falla, el Worker sirve el último dato bueno (hasta 24 h) mar
 
 ## Puesta en marcha
 
-Necesitás [Node 20+](https://nodejs.org/) y una cuenta (gratuita) de [Cloudflare](https://dash.cloudflare.com/sign-up).
+Necesitás **Node 20.19+ o 22.12+** (lo exige Vite 8; con Node 20.0–20.18 la instalación falla) y una cuenta gratuita de [Cloudflare](https://dash.cloudflare.com/sign-up).
 
 ### 1. Instalar y probar local
 
@@ -126,6 +126,22 @@ La arquitectura está pensada para que sumar una fuente sea corto:
 
 1. **Worker**: creá `worker/sources/loQueSea.ts` con una función que devuelva datos ya normalizados y registrala en [`worker/sources/index.ts`](worker/sources/index.ts) con su TTL de cache. Eso te da `/api/loQueSea` con cache, manejo de errores y datos viejos servidos ante caídas.
 2. **Frontend**: creá `src/widgets/LoQueSeaWidget.tsx` usando el hook `useWidgetData`, agregalo a [`src/widgets/registry.ts`](src/widgets/registry.ts) y definí su área en la grilla de `src/theme.css`.
+
+## Seguridad y privacidad
+
+Esto es importante y conviene decidirlo antes de deployar, no después.
+
+**La URL de tu Worker es pública y no tiene login.** Cualquiera que la conozca ve lo mismo que tu display. Y eso es más de lo que parece: el consumo eléctrico en tiempo real delata si hay alguien en la casa (300 W sostenidos es una casa vacía; 2 kW es alguien cocinando), el clima revela tu zona, y la lista de servicios muestra qué tenés en producción.
+
+Qué hacer al respecto, de menor a mayor esfuerzo:
+
+- **Mínimo**: dejá el nombre del Worker en algo no adivinable (no `display-kiosk`) y no publiques la URL. El repo incluye un `robots.txt` que pide a los buscadores no indexarla.
+- **Recomendado si te importa**: poné [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) delante del Worker (gratis hasta 50 usuarios) y autorizá solo tu cuenta. El teléfono se autentica una vez y queda.
+- **Contra el abuso**: no hay rate limiting. Alguien con la URL puede gastarte las 100.000 requests diarias del plan gratuito y dejar el display sin servicio hasta el otro día. Una regla de rate limiting de Cloudflare, o el mismo Access, lo resuelven.
+
+**Sobre `MONITOR_URLS`**: esas URLs las consulta el Worker desde la red de Cloudflare, no desde tu casa, así que no sirven para chequear servicios de tu red local. Y aunque la respuesta de la API no publica las URLs (solo el nombre y la latencia), evitá poner tokens en la query string de un health check.
+
+**Sobre las credenciales de Solax**: creá la aplicación solo con permisos de lectura. Si marcás los servicios de *control*, esa credencial puede operar tu inversor — y una credencial de más permisos es un problema más grande el día que se filtre.
 
 ## Costos y límites
 

@@ -1,0 +1,3 @@
+# El display muestra datos de una casa: no queremos que quede indexado.
+User-agent: *
+Disallow: /
