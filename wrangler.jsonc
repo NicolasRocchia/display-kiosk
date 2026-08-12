@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "display-kiosk",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    // Ubicación para el clima (click derecho en Google Maps copia lat/lon).
+    // Por defecto: Buenos Aires.
+    "LATITUDE": "-34.6037",
+    "LONGITUDE": "-58.3816",
+    "TIMEZONE": "America/Argentina/Buenos_Aires",
+
+    // Estación meteorológica local (opcional). Vacío = solo Open-Meteo.
+    // "utn-san-francisco" usa la estación pública de la UTN FRSF (Córdoba, AR)
+    // como ejemplo de adaptador; ver worker/sources/stations/.
+    "LOCAL_STATION": "",
+
+    // Servicios a monitorear. type: "http" (default, up = 2xx/3xx) o
+    // "statuspage" (interpreta el JSON de una Atlassian Statuspage).
+    "MONITOR_URLS": "[{\"name\":\"Claude\",\"url\":\"https://status.anthropic.com/api/v2/status.json\",\"type\":\"statuspage\"},{\"name\":\"GitHub\",\"url\":\"https://www.githubstatus.com/api/v2/status.json\",\"type\":\"statuspage\"}]"
+  }
+  // Secrets (nunca acá): SOLAX_CLIENT_ID y SOLAX_CLIENT_SECRET
+  //   prod: npx wrangler secret put SOLAX_CLIENT_ID / SOLAX_CLIENT_SECRET
+  //   dev:  copiar .dev.vars.example a .dev.vars y completar
+  // Sin credenciales el widget solar funciona en MODO DEMO con datos de ejemplo.
+}

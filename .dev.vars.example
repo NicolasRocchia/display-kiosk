@@ -1,0 +1,11 @@
+# Copiar a .dev.vars (gitignored) y completar para desarrollo local.
+# En producción se cargan como secrets:
+#   npx wrangler secret put SOLAX_CLIENT_ID
+#   npx wrangler secret put SOLAX_CLIENT_SECRET
+#
+# Se obtienen en https://developer.solaxcloud.com (login con tu cuenta de
+# SolaxCloud) → Application → crear app → Authorization Key.
+#
+# Si dejás esto vacío el display funciona igual, en modo demo con datos de ejemplo.
+SOLAX_CLIENT_ID=
+SOLAX_CLIENT_SECRET=

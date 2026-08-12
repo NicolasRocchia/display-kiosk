@@ -1,0 +1,659 @@
+/* Display kiosk — AMOLED: negro puro (píxeles apagados), tinta suave, status con etiqueta. */
+
+:root {
+  color-scheme: dark;
+  --surface: #000000;
+  --ink: #f2f1ec;
+  --ink-secondary: #c3c2b7;
+  --ink-muted: #898781;
+  --hairline: rgba(255, 255, 255, 0.1);
+  /* Status (paleta de referencia dataviz; ≥3.6:1 sobre negro) */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Reset kiosk: sin cursor ni gestos accidentales */
+  cursor: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: none;
+  overflow: hidden;
+}
+
+/* ---- Grilla ---- */
+
+.dashboard {
+  height: 100%;
+  display: grid;
+  gap: 3vmin;
+  padding: 4vmin;
+  transition: translate 1s ease;
+}
+
+@media (orientation: portrait) {
+  .dashboard {
+    grid-template-areas:
+      "clock"
+      "weather"
+      "solar"
+      "services";
+    grid-template-rows: auto 1fr 1fr auto;
+  }
+}
+
+/* Apaisado: clima | servicios en lista | hora (con sol) + solar */
+@media (orientation: landscape) {
+  .dashboard {
+    grid-template-areas:
+      "weather services clock"
+      "weather services solar";
+    grid-template-columns: 1.15fr 0.5fr 1.05fr;
+    grid-template-rows: 1fr 1.3fr;
+  }
+}
+
+.cell {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.cell > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Chrome común de widget ---- */
+
+.widget {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2vmin;
+  /* centra el bloque en celdas 1fr; en celdas auto no tiene efecto */
+  justify-content: center;
+}
+
+.widget__header {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5vmin;
+}
+
+.widget__title {
+  margin: 0;
+  font-size: 2.2vmin;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+}
+
+.widget__meta {
+  font-size: 2vmin;
+  color: var(--ink-secondary);
+}
+
+.widget__meta--warning {
+  color: var(--status-warning);
+}
+
+.widget__meta--critical {
+  color: var(--status-critical);
+}
+
+.widget__error {
+  margin: 0;
+  font-size: 2.4vmin;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.widget__note {
+  margin: 0;
+  font-size: 2vmin;
+  color: var(--ink-muted);
+}
+
+/* Marco según origen de la energía (diseño 1d): borde + resplandor interior.
+   Llena la celda: el sparkline aprovecha el espacio restante dentro del marco. */
+.widget--tone-good,
+.widget--tone-warning {
+  border-radius: 1.5vmin;
+  padding: 2vmin 2.5vmin;
+}
+
+.widget--tone-good {
+  border: 1px solid rgba(12, 163, 12, 0.45);
+  box-shadow: inset 0 0 3.5vmin rgba(12, 163, 12, 0.14);
+}
+
+.widget--tone-warning {
+  border: 1px solid rgba(250, 178, 25, 0.4);
+  box-shadow: inset 0 0 3.5vmin rgba(250, 178, 25, 0.12);
+}
+
+.widget__skeleton {
+  height: 8vmin;
+  border-radius: 1vmin;
+  background: rgba(255, 255, 255, 0.06);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ---- Stat tile ---- */
+
+.stat__value {
+  font-size: 4.6vmin;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.stat__unit {
+  font-size: 2.6vmin;
+  font-weight: 400;
+  color: var(--ink-secondary);
+}
+
+.stat__label {
+  font-size: 2vmin;
+  color: var(--ink-muted);
+}
+
+.stat-row {
+  display: flex;
+  gap: 4vmin;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+/* ---- Reloj ---- */
+
+.clock {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1vmin;
+}
+
+.clock__time {
+  /* tabular-nums a propósito: los dígitos cambian cada minuto y no deben "bailar" */
+  font-variant-numeric: tabular-nums;
+  font-size: 17vmin;
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.clock__seconds {
+  font-size: 5vmin;
+  font-weight: 400;
+  color: var(--ink-muted);
+  margin-left: 1.5vmin;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock__date {
+  font-size: 3.4vmin;
+  color: var(--ink-secondary);
+}
+
+.clock__sun {
+  font-size: 3.2vmin;
+  color: var(--ink-secondary);
+}
+
+/* ---- Clima ---- */
+
+.weather__now {
+  display: flex;
+  align-items: center;
+  gap: 2.5vmin;
+}
+
+.weather__icon {
+  font-size: 8vmin;
+  line-height: 1;
+}
+
+.weather__temp {
+  font-size: 11vmin;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.weather__cond {
+  font-size: 2.6vmin;
+  color: var(--ink);
+}
+
+.weather__feels {
+  color: var(--ink-secondary);
+  font-size: 2.2vmin;
+}
+
+/* ---- Solar ---- */
+
+.solar__hero {
+  display: flex;
+  align-items: baseline;
+  gap: 2.5vmin;
+  flex-wrap: wrap;
+}
+
+.solar__power {
+  font-size: 10vmin;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.solar__power--idle {
+  opacity: 0.45;
+}
+
+.solar__power-unit {
+  font-size: 4vmin;
+  color: var(--ink-secondary);
+}
+
+.badge {
+  font-size: 2.4vmin;
+  padding: 0.6vmin 1.4vmin;
+  border-radius: 1vmin;
+  border: 1px solid var(--hairline);
+}
+
+.badge--critical {
+  color: var(--status-critical);
+  border-color: var(--status-critical);
+}
+
+.flow-arrow {
+  font-weight: 700;
+}
+
+.flow-arrow--good {
+  color: var(--status-good);
+}
+
+.flow-arrow--warning {
+  color: var(--status-warning);
+}
+
+/* ---- Solar: cuadrícula paneles/casa/red/% ---- */
+
+.solar-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2vmin 3.5vmin;
+  justify-content: space-between;
+  align-items: end;
+}
+
+
+.flow__node {
+  min-width: 0;
+}
+
+.flow__value {
+  font-size: 4.6vmin;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.flow__value--main {
+  font-size: 7vmin;
+  font-weight: 300;
+}
+
+.flow__value--idle {
+  opacity: 0.45;
+}
+
+/* Tinte sutil por origen: paneles verdoso, red ambarino (tinta mezclada, no saturada).
+   Después de las bases a propósito: a igual especificidad gana el último. */
+.flow__value--solar {
+  color: #96d292;
+}
+
+.flow__value--grid {
+  color: #f5d898;
+  font-weight: 400;
+}
+
+.flow__arrow {
+  font-size: 3.6vmin;
+  font-weight: 700;
+  flex: none;
+}
+
+.flow__arrow--good {
+  color: var(--status-good);
+  animation: flow-pulse 3s ease-in-out infinite alternate;
+}
+
+.flow__arrow--warning {
+  color: var(--status-warning);
+  animation: flow-pulse 3s ease-in-out infinite alternate;
+}
+
+.flow__arrow--off {
+  color: var(--ink-muted);
+  opacity: 0.3;
+}
+
+@keyframes flow-pulse {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow__arrow--good,
+  .flow__arrow--warning {
+    animation: none;
+  }
+}
+
+/* ---- Curva del día: llena el espacio restante del widget ---- */
+
+.sparkline-box {
+  flex: 1;
+  min-height: 8vmin;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sparkline {
+  width: 100%;
+  height: 100%;
+  max-height: 26vmin;
+  display: block;
+}
+
+.sparkline__line {
+  fill: none;
+  stroke: var(--status-good);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.sparkline__area {
+  fill: rgba(12, 163, 12, 0.1);
+  stroke: none;
+}
+
+/* ---- Pronóstico horario ---- */
+
+.hourly {
+  display: flex;
+  gap: 3.5vmin;
+}
+
+.hourly__col {
+  text-align: center;
+  min-width: 0;
+}
+
+.hourly__hour {
+  font-size: 2.6vmin;
+  color: var(--ink-muted);
+}
+
+.hourly__icon {
+  font-size: 5vmin;
+  line-height: 1.4;
+}
+
+.hourly__temp {
+  font-size: 3.4vmin;
+  font-weight: 600;
+}
+
+.hourly__rain {
+  font-size: 2.4vmin;
+  color: var(--ink-secondary);
+}
+
+/* ---- Pronóstico de próximos días ---- */
+
+.daily {
+  display: flex;
+  justify-content: space-between;
+}
+
+.daily__col {
+  text-align: center;
+  min-width: 0;
+}
+
+.daily__name {
+  font-size: 2.2vmin;
+  color: var(--ink-muted);
+}
+
+.daily__icon {
+  font-size: 4.5vmin;
+  line-height: 1.4;
+}
+
+.daily__temps {
+  font-size: 2.8vmin;
+  font-weight: 600;
+}
+
+.daily__rain {
+  font-size: 2vmin;
+  color: var(--ink-secondary);
+}
+
+/* ---- Servicios ---- */
+
+.services {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 4vmin;
+  flex-wrap: wrap;
+}
+
+.services__item {
+  display: flex;
+  align-items: center;
+  gap: 1.2vmin;
+  font-size: 2.4vmin;
+}
+
+.services__dot {
+  width: 1.6vmin;
+  height: 1.6vmin;
+  border-radius: 50%;
+}
+
+.services__dot--good {
+  background: var(--status-good);
+}
+
+.services__dot--warning {
+  background: var(--status-warning);
+}
+
+.services__dot--critical {
+  background: var(--status-critical);
+}
+
+.services__meta {
+  color: var(--ink-muted);
+}
+
+/* ---- Diseño 2 (apaisado): clima protagonista, reloj compacto ----
+   Al final del archivo a propósito: a igual especificidad debe ganarle a las bases de arriba. */
+
+@media (orientation: landscape) {
+  /* Combo hora al máximo, centrado, con el sol debajo */
+  .clock__time {
+    font-size: 18vmin;
+  }
+
+  .clock__seconds {
+    font-size: 5vmin;
+  }
+
+  .clock__date {
+    font-size: 3.4vmin;
+  }
+
+  .clock__sun {
+    font-size: 3.8vmin;
+  }
+
+  /* Los tres bloques superiores alineados al mismo tope */
+  .cell--clock .clock {
+    align-items: center;
+    text-align: center;
+    gap: 1.4vmin;
+    justify-content: flex-start;
+    padding-top: 2vmin;
+  }
+
+  .cell--weather .widget,
+  .cell--services .widget {
+    justify-content: flex-start;
+    padding-top: 2vmin;
+  }
+
+  /* Solar al máximo de su celda (sin invadir la hora: la grilla lo contiene) */
+  .cell--solar .flow__value {
+    font-size: 6.6vmin;
+  }
+
+  .cell--solar .flow__value--main {
+    font-size: 8.6vmin;
+  }
+
+  .cell--solar .flow__arrow {
+    font-size: 5.2vmin;
+  }
+
+  .cell--solar .stat__value {
+    font-size: 6.4vmin;
+  }
+
+  .cell--solar .stat__label {
+    font-size: 2.6vmin;
+  }
+
+  /* Servicios como lista vertical, centrada entre clima y la columna de la hora */
+  .cell--services .widget {
+    align-items: center;
+  }
+
+  .cell--services .services {
+    flex-direction: column;
+    gap: 2.4vmin;
+  }
+
+  .cell--services .services__item {
+    font-size: 2.9vmin;
+  }
+
+  .cell--services .services__dot {
+    width: 2vmin;
+    height: 2vmin;
+  }
+
+  .weather__icon {
+    font-size: 14vmin;
+  }
+
+  .weather__temp {
+    font-size: 23vmin;
+  }
+
+  .weather__cond {
+    font-size: 4.2vmin;
+  }
+
+  .weather__feels {
+    font-size: 3.4vmin;
+  }
+
+  .cell--weather .stat__value {
+    font-size: 6vmin;
+  }
+
+  .cell--weather .stat__label {
+    font-size: 2.7vmin;
+  }
+
+  .cell--weather .widget {
+    gap: 2.4vmin;
+  }
+
+  /* Pronóstico horario al máximo: las columnas se reparten el ancho completo */
+  .hourly {
+    gap: 0;
+    justify-content: space-between;
+  }
+
+  .hourly__hour {
+    font-size: 3.6vmin;
+  }
+
+  .hourly__icon {
+    font-size: 7vmin;
+  }
+
+  .hourly__temp {
+    font-size: 4.6vmin;
+  }
+
+  .hourly__rain {
+    font-size: 3.4vmin;
+  }
+
+  .daily__name {
+    font-size: 2.8vmin;
+  }
+
+  .daily__icon {
+    font-size: 5.5vmin;
+  }
+
+  .daily__temps {
+    font-size: 4vmin;
+  }
+
+  .daily__rain {
+    font-size: 2.8vmin;
+  }
+}
