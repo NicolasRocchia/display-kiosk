@@ -9,7 +9,7 @@ Convertí un teléfono viejo en un display de escritorio que muestra el clima, t
 ## Qué muestra
 
 - **Clima** — temperatura, sensación térmica, humedad, viento, mínima/máxima, pronóstico por hora y de 5 días. Sale de [Open-Meteo](https://open-meteo.com/) (gratis, sin API key). Opcionalmente puede mezclar mediciones de una estación meteorológica local.
-- **Solar** — lo que entregan los paneles, lo que consume la casa, lo que entra o sale de la red, el porcentaje del consumo del día cubierto por el sol y la curva de generación de la jornada. Vía la API de [SolaxCloud](https://developer.solaxcloud.com); el marco del widget se pone verde cuando los paneles cubren el consumo y ámbar cuando estás comprando de la red.
+- **Solar** — lo que entregan los paneles, lo que consume la casa, lo que entra o sale de la red, el porcentaje del consumo del día cubierto por el sol, y la curva de la jornada con generación (verde) y consumo (ámbar) superpuestos: donde la ámbar supera a la verde, esa diferencia es lo que se compró de la red. Vía la API de [SolaxCloud](https://developer.solaxcloud.com); el marco del widget se pone verde cuando los paneles cubren el consumo y ámbar cuando estás comprando de la red.
 - **Hora y fecha** con salida y puesta del sol.
 - **Servicios** — semáforo con la latencia de las URLs que le indiques. Entiende chequeos HTTP comunes y páginas de estado tipo [Statuspage](https://www.atlassian.com/software/statuspage) (Claude, GitHub, Cloudflare, etc.).
 

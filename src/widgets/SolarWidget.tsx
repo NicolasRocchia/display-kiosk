@@ -40,7 +40,11 @@ export function SolarWidget() {
 
   useEffect(() => {
     if (!data) return
-    setSeries(data.demo ? demoSeries() : recordSample(data.inverterUploadTime, data.acPowerW))
+    setSeries(
+      data.demo
+        ? demoSeries()
+        : recordSample(data.inverterUploadTime, data.acPowerW, data.homeConsumptionW),
+    )
   }, [data])
 
   return (
@@ -95,7 +99,7 @@ function SolarGrid({ data }: { data: SolarData }) {
         <div className="stat__label">paneles</div>
       </div>
       <div className="flow__node">
-        <div className="flow__value flow__value--main">
+        <div className="flow__value flow__value--main flow__value--home">
           <span className={`flow__arrow ${generating ? 'flow__arrow--good' : 'flow__arrow--off'}`}>
             ⟶
           </span>{' '}
@@ -119,7 +123,9 @@ function SolarGrid({ data }: { data: SolarData }) {
   )
 }
 
-// Curva de generación del día (acumulada por el propio kiosk).
+// Curvas del día acumuladas por el propio kiosk: generación (verde, con área)
+// y consumo del hogar (ámbar). Donde la ámbar supera a la verde, esa diferencia
+// es la energía que se compró de la red.
 // Con menos de 4 muestras (~20 min de día) el trazo aún no dice nada.
 // La ventana X va del primer punto del día hasta ahora (mínimo 3 h): la curva
 // siempre llena el ancho y crece con el día, en vez de ser una púa sobre 24 h.
@@ -129,19 +135,35 @@ function Sparkline({ series }: { series: SeriesPoint[] }) {
   const last = series[series.length - 1]
   const startM = first.m
   const spanM = Math.max(last.m - first.m, 180)
-  const maxW = Math.max(100, ...series.map((p) => p.w))
+  // Los puntos guardados antes de que la serie registrara consumo no tienen `c`:
+  // la curva ámbar arranca donde empiezan los datos, sin cortar la verde.
+  const conConsumo = series.filter((p) => p.c !== undefined)
+  // Escala compartida a propósito: con una escala por curva se cruzarían donde
+  // no corresponde y el gráfico mentiría sobre quién cubre a quién.
+  const maxW = Math.max(100, ...series.map((p) => p.w), ...conConsumo.map((p) => p.c ?? 0))
   const x = (m: number) => ((m - startM) / spanM) * 288
   const y = (w: number) => 40 - (w / maxW) * 38
+
   // Sin String.replaceAll: los WebView viejos de Android (el hardware que este
   // proyecto recicla) no lo implementan y el widget entero explotaría al dibujar.
   const coords = series.map((p) => `${x(p.m).toFixed(1)},${y(p.w).toFixed(1)}`)
   const line = coords.join(' ')
   const area = `M${x(first.m).toFixed(1)},40 L${coords.join(' L')} L${x(last.m).toFixed(1)},40 Z`
+  const consumo = conConsumo.map((p) => `${x(p.m).toFixed(1)},${y(p.c ?? 0).toFixed(1)}`).join(' ')
 
   return (
-    <svg className="sparkline" viewBox="0 0 288 40" preserveAspectRatio="none" role="img" aria-label="Generación del día">
+    <svg
+      className="sparkline"
+      viewBox="0 0 288 40"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="Generación de los paneles y consumo del hogar durante el día"
+    >
       <path d={area} className="sparkline__area" />
       <polyline points={line} className="sparkline__line" />
+      {conConsumo.length >= 2 && (
+        <polyline points={consumo} className="sparkline__line sparkline__line--consumo" />
+      )}
     </svg>
   )
 }

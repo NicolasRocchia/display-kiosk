@@ -344,6 +344,11 @@ body {
   font-weight: 400;
 }
 
+/* El número de casa lleva el tinte de su curva: así el gráfico se lee sin leyenda */
+.flow__value--home {
+  color: #f2c078;
+}
+
 .flow__arrow {
   font-size: 3.6vmin;
   font-weight: 700;
@@ -404,6 +409,11 @@ body {
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+/* Después de la base a propósito: misma especificidad, gana el último */
+.sparkline__line--consumo {
+  stroke: #e0a94a;
 }
 
 .sparkline__area {
