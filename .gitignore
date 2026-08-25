@@ -17,7 +17,11 @@ dist-ssr
 .dev.vars
 
 # Config local del agente (rutas absolutas propias de cada máquina)
-.claude
+# Claude Code — solo lo local; el harness (CLAUDE.md, launch.json, skills) se
+# versiona. Ignorar .claude/ entero deja sin efecto estas reglas: git no
+# desciende a un directorio excluido.
+.claude/settings.local.json
+.claude/worktrees/
 
 # Editor directories and files
 .vscode/*
