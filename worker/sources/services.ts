@@ -5,7 +5,11 @@ const TIMEOUT_MS = 5_000;
 interface MonitorTarget {
   name: string;
   url: string;
-  /** "http" (default): up = respuesta 2xx/3xx · "statuspage": interpreta el JSON de una Atlassian Statuspage */
+  /**
+   * "http" (default): up = respuesta 2xx/3xx.
+   * "statuspage": interpreta una Atlassian Statuspage. Con /api/v2/summary.json
+   * además nombra el componente afectado; con /api/v2/status.json solo el estado.
+   */
   type?: "http" | "statuspage";
 }
 
@@ -51,22 +55,43 @@ async function check(t: MonitorTarget): Promise<ServiceCheck> {
   }
 }
 
-// Formato Atlassian Statuspage (/api/v2/status.json):
-// { status: { indicator: "none"|"minor"|"major"|"critical", description: "..." } }
+// Formato Atlassian Statuspage. status.json trae solo { status: { indicator, description } };
+// summary.json suma incidents[] con sus componentes, que es lo que permite decir
+// QUÉ se rompió ("Grok Bot") y no solo que algo está degradado.
+interface StatuspagePayload {
+  status?: { indicator?: string; description?: string };
+  incidents?: Array<{
+    name?: string;
+    status?: string;
+    components?: Array<{ name?: string }>;
+  }>;
+}
+
 async function interpretStatuspage(base: ServiceCheck, res: Response): Promise<ServiceCheck> {
   if (!res.ok) {
     return base;
   }
   try {
-    const j = await res.json<{ status?: { indicator?: string; description?: string } }>();
+    const j = await res.json<StatuspagePayload>();
     const indicator = j.status?.indicator ?? "none";
     base.up = indicator === "none" || indicator === "minor";
     base.degraded = indicator === "minor";
     if (indicator !== "none") {
-      base.detail = j.status?.description ?? indicator;
+      base.detail = affectedLabel(j) ?? j.status?.description ?? indicator;
     }
     return base;
   } catch {
     return base;
   }
+}
+
+// El componente afectado del primer incidente abierto; si el incidente no
+// declara componentes, su título. Corto, porque va en la línea del widget.
+function affectedLabel(j: StatuspagePayload): string | null {
+  const incident = j.incidents?.find((i) => i.status !== "resolved" && i.status !== "postmortem");
+  if (!incident) return null;
+  const parts = (incident.components ?? []).map((c) => c.name).filter((n): n is string => !!n);
+  const label = parts.length > 0 ? parts.slice(0, 2).join(", ") : incident.name;
+  if (!label) return null;
+  return label.length > 40 ? `${label.slice(0, 37)}…` : label;
 }

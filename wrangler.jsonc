@@ -24,7 +24,7 @@
 
     // Servicios a monitorear. type: "http" (default, up = 2xx/3xx) o
     // "statuspage" (interpreta el JSON de una Atlassian Statuspage).
-    "MONITOR_URLS": "[{\"name\":\"Claude\",\"url\":\"https://status.anthropic.com/api/v2/status.json\",\"type\":\"statuspage\"},{\"name\":\"GitHub\",\"url\":\"https://www.githubstatus.com/api/v2/status.json\",\"type\":\"statuspage\"}]"
+    "MONITOR_URLS": "[{\"name\":\"Claude\",\"url\":\"https://status.anthropic.com/api/v2/summary.json\",\"type\":\"statuspage\"},{\"name\":\"GitHub\",\"url\":\"https://www.githubstatus.com/api/v2/summary.json\",\"type\":\"statuspage\"}]"
   }
   // Secrets (nunca acá): SOLAX_CLIENT_ID y SOLAX_CLIENT_SECRET
   //   prod: npx wrangler secret put SOLAX_CLIENT_ID / SOLAX_CLIENT_SECRET
