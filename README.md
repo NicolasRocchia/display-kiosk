@@ -64,7 +64,7 @@ En [`wrangler.jsonc`](wrangler.jsonc), sección `vars`:
 |---|---|
 | `LATITUDE` / `LONGITUDE` | Tu ubicación para el clima. Click derecho en Google Maps copia las coordenadas. |
 | `TIMEZONE` | Zona horaria IANA, ej. `America/Argentina/Buenos_Aires`. |
-| `MONITOR_URLS` | JSON con los servicios a vigilar: `[{"name":"Mi API","url":"https://..."}]`. Agregá `"type":"statuspage"` si la URL es el `status.json` de una Statuspage. |
+| `MONITOR_URLS` | JSON con los servicios a vigilar: `[{"name":"Mi API","url":"https://..."}]`. Agregá `"type":"statuspage"` si la URL es el `/api/v2/summary.json` de una Statuspage: además del estado, el display nombra el componente afectado cuando hay un incidente. |
 | `LOCAL_STATION` | Estación meteorológica local (opcional, ver abajo). Vacío = solo Open-Meteo. |
 
 Después de tocar este archivo: `npm run cf-typegen && npm run deploy`.
