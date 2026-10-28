@@ -1,6 +1,6 @@
 // Contrato JSON entre el Worker (/api/*) y el frontend.
 
-export type SourceId = "solar" | "weather" | "services";
+export type SourceId = "solar" | "weather" | "services" | "alerts";
 
 export interface ApiOk<T> {
   ok: true;
@@ -56,6 +56,10 @@ export interface HourForecast {
   tempC: number;
   precipProbPct: number;
   weatherCode: number;
+  /** nubosidad total prevista, 0-100 (opcional: entradas cacheadas viejas no lo traen) */
+  cloudCoverPct?: number;
+  /** radiación de onda corta prevista, W/m² (opcional, ídem) */
+  radiationWm2?: number;
 }
 
 export interface DayForecast {
@@ -65,6 +69,10 @@ export interface DayForecast {
   maxC: number;
   weatherCode: number;
   precipProbPct: number;
+  /** lluvia acumulada prevista, mm (opcional: entradas cacheadas viejas no lo traen) */
+  precipMm?: number;
+  /** ráfaga máxima prevista, km/h (opcional, ídem) */
+  windMaxKmh?: number;
 }
 
 export interface WeatherData {
@@ -82,7 +90,7 @@ export interface WeatherData {
   /** ISO local sin zona, ej. "2026-08-10T07:38" */
   sunrise: string;
   sunset: string;
-  /** próximas ~8 horas desde la hora actual */
+  /** próximas ~36 horas desde la hora en curso (el kiosk muestra 6) */
   hourly: HourForecast[];
   /** hoy + próximos días (days[1] = mañana) */
   days: DayForecast[];
@@ -108,3 +116,18 @@ export interface ServiceCheck {
 }
 
 export type ServicesData = ServiceCheck[];
+
+/** Alerta del SMN argentino (Sistema de Alerta Temprana, feed CAP) que cubre la ubicación */
+export interface SmnAlert {
+  /** "Tormentas", "Vientos", "Lluvias", "Temperaturas extremas"… tal como lo titula el SMN */
+  event: string;
+  /** nivel del SAT, derivado de la severidad CAP */
+  level: "amarilla" | "naranja" | "roja";
+  /** ISO 8601 con zona */
+  onset: string;
+  expires: string;
+  /** texto del SMN, primera oración */
+  description: string;
+}
+
+export type AlertsData = SmnAlert[];

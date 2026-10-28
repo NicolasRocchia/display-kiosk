@@ -1,0 +1,5 @@
+# Copiar a /mnt/us/panel/panel.conf en el Kindle.
+# URL del PNG apaisado 1448x1072 que genera el Worker
+PANEL_URL="https://display-kiosk.TU-SUBDOMINIO.workers.dev/api/panel.png"
+# Minutos entre repintados completos (el reloj se repinta solo cada minuto)
+FULL_EVERY=5

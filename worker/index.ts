@@ -1,5 +1,6 @@
 import type { ApiErr, ApiOk } from "../shared/api-types";
 import { cachedFetch } from "./cache";
+import { panelPng } from "./panel";
 import { isKnownSource, sources, type Source } from "./sources";
 
 // El TTL vive solo en el Worker: el cliente siempre ve ageSeconds veraz.
@@ -27,6 +28,23 @@ export default {
 
     if (path === "/api/health") {
       return json({ ok: true, now: new Date().toISOString() });
+    }
+
+    // Panel e-ink (Kindle): PNG gris apaisado con los mismos datos que los widgets.
+    if (path === "/api/panel.png") {
+      try {
+        const { png, stale } = await panelPng(env);
+        return new Response(png as BodyInit, {
+          headers: {
+            "Content-Type": "image/png",
+            "Cache-Control": "no-store",
+            "X-Panel-Stale": stale ? "1" : "0",
+          },
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        return json(err("panel", "RENDER_ERROR", message), 500);
+      }
     }
 
     const id = path.slice("/api/".length);

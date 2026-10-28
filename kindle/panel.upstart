@@ -1,0 +1,14 @@
+# /etc/upstart/panel.conf : arranca el panel e-ink al boot
+start on started lab126_gui
+stop on stopping system
+respawn
+respawn limit 5 60
+script
+    # Si el Kindle bootea enchufado a una PC, /mnt/us tarda en estar disponible
+    n=0
+    while [ ! -f /mnt/us/panel/panel.sh ] && [ $n -lt 300 ]; do
+        sleep 2
+        n=$((n + 1))
+    done
+    exec /bin/sh /mnt/us/panel/panel.sh
+end script

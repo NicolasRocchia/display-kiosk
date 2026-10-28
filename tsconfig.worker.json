@@ -12,6 +12,8 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
+    // Imports con extensión .ts: así los módulos del panel corren también en los tests de Node
+    "allowImportingTsExtensions": true,
 
     /* Linting */
     "noUnusedLocals": true,

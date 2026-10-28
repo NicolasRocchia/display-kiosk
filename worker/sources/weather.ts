@@ -22,12 +22,16 @@ interface OpenMeteoResponse {
     temperature_2m_min: number[];
     weather_code: number[];
     precipitation_probability_max: number[];
+    precipitation_sum: number[];
+    wind_gusts_10m_max: number[];
   };
   hourly: {
     time: string[];
     temperature_2m: number[];
     precipitation_probability: number[];
     weather_code: number[];
+    cloud_cover: number[];
+    shortwave_radiation: number[];
   };
 }
 
@@ -57,6 +61,8 @@ export async function fetchWeather(env: Env): Promise<WeatherData> {
       tempC: om.hourly.temperature_2m[i] ?? 0,
       precipProbPct: om.hourly.precipitation_probability[i] ?? 0,
       weatherCode: om.hourly.weather_code[i] ?? 0,
+      cloudCoverPct: om.hourly.cloud_cover?.[i] ?? undefined,
+      radiationWm2: om.hourly.shortwave_radiation?.[i] ?? undefined,
     })),
     days: (om.daily?.time ?? []).map((date, i) => ({
       date,
@@ -64,6 +70,8 @@ export async function fetchWeather(env: Env): Promise<WeatherData> {
       maxC: om.daily.temperature_2m_max[i] ?? 0,
       weatherCode: om.daily.weather_code[i] ?? 0,
       precipProbPct: om.daily.precipitation_probability_max[i] ?? 0,
+      precipMm: om.daily.precipitation_sum?.[i] ?? undefined,
+      windMaxKmh: om.daily.wind_gusts_10m_max?.[i] ?? undefined,
     })),
     currentSource: station ? "station" : "model",
     windDir: station?.windDir ?? null,
@@ -94,11 +102,15 @@ async function fetchOpenMeteo(env: Env): Promise<OpenMeteoResponse> {
   );
   url.searchParams.set(
     "daily",
-    "sunrise,sunset,uv_index_max,temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max",
+    "sunrise,sunset,uv_index_max,temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,precipitation_sum,wind_gusts_10m_max",
   );
-  url.searchParams.set("hourly", "temperature_2m,precipitation_probability,weather_code");
-  // hourly: solo las próximas 8 horas desde la hora en curso; daily: hoy + 5 días
-  url.searchParams.set("forecast_hours", "8");
+  url.searchParams.set(
+    "hourly",
+    "temperature_2m,precipitation_probability,weather_code,cloud_cover,shortwave_radiation",
+  );
+  // hourly: 36 horas desde la hora en curso (el kiosk usa 6; el panel e-ink necesita la
+  // noche y el día siguiente para nubes y radiación); daily: hoy + 5 días
+  url.searchParams.set("forecast_hours", "36");
   url.searchParams.set("forecast_days", "6");
 
   const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });

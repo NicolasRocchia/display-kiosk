@@ -24,7 +24,8 @@ mantenerla así:
   están las reales.
 - **`MONITOR_URLS` solo con statuspages públicos** (Claude, GitHub). En `Display` está la
   lista de sitios propios — esa lista **no viene acá**, porque revela qué hay en producción.
-- **Ningún dominio propio** en archivos versionados. Verificado el 2026-08-25: cero.
+- **Ningún dominio propio** en archivos versionados. Verificado el 2026-08-25: cero; el
+  2026-10-28, al portar el panel e-ink, también.
 - La estación **UTN San Francisco sí está**, y está bien: es un adaptador opcional de una
   estación pública (`worker/sources/stations/`), documentado como feature. No es un dato
   privado.
@@ -45,6 +46,18 @@ portó a `Display` el 2026-08-25; **sigue sin portarse**:
 
 - `src/components/WidgetBoundary.tsx` — error boundary por widget.
 - `worker/sources/stations/` — las estaciones modularizadas.
+
+## Panel e-ink (portado desde `Display` el 2026-10-28)
+
+`worker/panel/` y `kindle/` vinieron de `Display` con tres adaptaciones que **no hay que
+perder al volver a portar**: la fuente del SMN (`worker/sources/smn.ts`) solo consulta si
+las coordenadas caen dentro de Argentina; el panel muestra "datos de ejemplo" cuando
+`SolarData.demo` es true; y `kindle/panel.sh` detecta el gateway con `route` en vez de
+tenerlo fijo. El test del panel usa el Obelisco como coordenadas y nombres de servicios
+genéricos, y `docs/panel.png` se genera con datos de ejemplo (no con una captura real).
+
+Pendiente de volver a `Display` desde acá: en `layout.ts`, el recorte de nombre y detalle en
+las filas de servicios con problemas (se pisaban) y el recorte de la línea de notas del solar.
 
 ## Antes de commitear
 

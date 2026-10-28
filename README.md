@@ -15,6 +15,8 @@ Convertí un teléfono viejo en un display de escritorio que muestra el clima, t
 
 **Sin credenciales de Solax funciona igual**, en modo demo con datos de ejemplo: podés deployarlo y verlo andando en dos minutos.
 
+Y si en vez de un teléfono tenés un **Kindle viejo**, el mismo Worker lo sirve como panel e-ink: `/api/panel.png` es el dashboard dibujado como imagen, con algunos extras pensados para una pantalla que se mira de reojo (alertas meteorológicas, qué hay en el cielo esta noche, la mejor ventana del día para prender cargas pesadas). Ver [Panel e-ink en un Kindle](#panel-e-ink-en-un-kindle).
+
 ## Cómo funciona
 
 Un solo Worker de Cloudflare hace las dos cosas: sirve el frontend (React + Vite) y expone `/api/*`, que hace de proxy y cache de las APIs externas.
@@ -111,6 +113,23 @@ El display se cuida solo: recarga completa todos los días a las 04:30 para evit
 
 > **Si el teléfono no abre la URL** y da un error de DNS o de SSL: algunos ISP filtran el dominio `workers.dev` completo. La solución más rápida es ponerle un DNS privado al teléfono (*Ajustes → Conexión y compartir → DNS privado → `dns.google`*). La definitiva es apuntar un dominio propio al Worker.
 
+## Panel e-ink en un Kindle
+
+![Panel e-ink en modo demo](docs/panel.png)
+
+`GET /api/panel.png` devuelve el dashboard como PNG gris de 8 bits, 1448×1072 apaisado, pensado para un Kindle Paperwhite jailbreakeado que lo baja y lo pinta cada 5 minutos (la hora la pinta el propio Kindle cada minuto, en la caja vacía de arriba a la derecha). No hace falta que ninguna PC esté prendida: el Worker arma la imagen en Cloudflare con `@resvg/resvg-wasm`, a partir de los mismos datos y el mismo cache que `/api/*`.
+
+Además de los widgets del teléfono, el panel muestra:
+
+- **Una línea de alerta** bajo el estado del cielo. En Argentina sale del feed CAP oficial del [SMN](https://www.smn.gob.ar/) (`/api/alerts`): se conservan las alertas cuyo polígono contiene tus coordenadas, con su nivel amarilla/naranja/roja. Fuera de Argentina esa fuente no se consulta. Si no hay alerta oficial, se muestra una local derivada del pronóstico: helada (mínima de 3° o menos), ráfagas de 40 km/h o más, tormenta o calor de 35° o más en los próximos tres días.
+- **Esta noche**: fase de la luna con salida y puesta, planetas a más de 10° sobre el horizonte a las 22, nubosidad prevista a las 22 y a la 1, y un veredicto para sacar el telescopio. Efemérides con [astronomy-engine](https://github.com/cosinekitty/astronomy), sin red.
+- **Lluvia** de hoy (y del mes y del año si hay estación local), milímetros esperados en los 5 días.
+- **Cargas pesadas**: la ventana de horas en que la generación prevista supera 2 kW, para prender el termotanque o el lavarropas con sol. Se calcula con la radiación prevista de Open-Meteo, calibrada con lo que el inversor está entregando ahora respecto de la radiación medida (si hay estación).
+
+Todo se deriva al vuelo; el Worker no guarda nada. La curva solar del día vive en memoria del isolate (si Cloudflare lo recicla, se rearma sola con las muestras siguientes).
+
+El lado del dispositivo (jailbreak, KOReader, script de pintado, arranque automático) está en [`kindle/README.md`](kindle/README.md). Está probado en un Paperwhite 10ª generación; para otro modelo hay que ajustar la resolución en `worker/panel/layout.ts`.
+
 ## Diseño del display
 
 Pensado para mirarse todo el día sin molestar:
@@ -147,7 +166,8 @@ Qué hacer al respecto, de menor a mayor esfuerzo:
 
 Con el plan gratuito de Cloudflare y una sola pantalla, esto no cuesta nada y queda lejísimos de cualquier límite:
 
-- **Cloudflare Workers**: 100.000 requests/día gratis; el display usa unos 4.500. Los archivos estáticos no cuentan.
+- **Cloudflare Workers**: 100.000 requests/día gratis; el display usa unos 4.500 y el panel e-ink unos 300 más. Los archivos estáticos no cuentan. El rasterizador del panel (resvg en WebAssembly) pesa unos 965 KB comprimidos: entra en el límite de 3 MB del plan gratuito, pero es la pieza más grande del Worker.
+- **SMN** (solo Argentina): el feed de alertas se consulta una vez cada 15 minutos; son entre 10 y 20 pedidos por consulta (uno por alerta vigente).
 - **Open-Meteo**: gratis para uso no comercial; el cache lo consulta 1 vez cada 10 minutos.
 - **SolaxCloud**: el paquete gratuito del portal permite 100 llamadas por minuto; el display usa 2 por minuto. Ojo que el inversor sube datos a la nube cada ~5 minutos, así que ese es el límite real de frescura del dato, no el polling.
 

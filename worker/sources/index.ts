@@ -1,5 +1,6 @@
-import type { ServicesData, SolarData, SourceId, WeatherData } from "../../shared/api-types";
+import type { AlertsData, ServicesData, SolarData, SourceId, WeatherData } from "../../shared/api-types";
 import { fetchServices } from "./services";
+import { fetchAlerts } from "./smn";
 import { fetchSolar } from "./solax";
 import { fetchWeather } from "./weather";
 
@@ -14,6 +15,8 @@ export const sources = {
   solar: { id: "solar", ttlSeconds: 60, fetch: fetchSolar } satisfies Source<SolarData>,
   weather: { id: "weather", ttlSeconds: 600, fetch: fetchWeather } satisfies Source<WeatherData>,
   services: { id: "services", ttlSeconds: 60, fetch: fetchServices } satisfies Source<ServicesData>,
+  // Solo tiene sentido en Argentina: fuera del país devuelve [] sin salir a la red.
+  alerts: { id: "alerts", ttlSeconds: 900, fetch: fetchAlerts } satisfies Source<AlertsData>,
 } as const;
 
 export type KnownSourceId = keyof typeof sources;

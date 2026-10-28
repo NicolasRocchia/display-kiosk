@@ -9,7 +9,7 @@
     "dev:lan": "vite --host",
     "build": "tsc -b && vite build",
     "check": "npm test && npm run build",
-    "test": "node --experimental-strip-types --no-warnings worker/cache.test.ts",
+    "test": "node --experimental-strip-types --no-warnings worker/cache.test.ts && node --experimental-strip-types --no-warnings worker/panel.test.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "preview:lan": "npm run build && vite preview --host",
@@ -17,6 +17,8 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
+    "astronomy-engine": "^2.1.19",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
