@@ -13,6 +13,13 @@ export interface CachedResult<T> {
   stale: boolean;
 }
 
+export interface CacheOptions {
+  /** techo de espera sobre una consulta al upstream ya en curso (default INFLIGHT_MAX_WAIT_MS) */
+  maxWaitMs?: number;
+  /** pausa tras un fallo antes de volver al upstream (default FAILURE_COOLDOWN_MS) */
+  failureCooldownMs?: number;
+}
+
 const memory = new Map<string, CacheEntry<unknown>>();
 const lastFailureAt = new Map<string, number>();
 /** consultas al upstream en curso, para no duplicarlas entre requests concurrentes */
@@ -20,6 +27,10 @@ const inFlight = new Map<string, Promise<CacheEntry<unknown>>>();
 
 const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 const FAILURE_COOLDOWN_MS = 30_000;
+// Por encima del timeout de cualquier fuente (8 s) y por debajo del que espera el
+// cliente (15 s): el Worker tiene que alcanzar a descartar una consulta colgada y
+// responder antes de que el kiosk corte, o el timer muere con la request y no la limpia.
+const INFLIGHT_MAX_WAIT_MS = 12_000;
 
 const syntheticUrl = (id: string) => `https://display-cache.internal/${id}`;
 
@@ -53,7 +64,9 @@ export async function cachedFetch<T>(
   id: string,
   ttlSeconds: number,
   fetcher: () => Promise<T>,
+  options: CacheOptions = {},
 ): Promise<CachedResult<T>> {
+  const { maxWaitMs = INFLIGHT_MAX_WAIT_MS, failureCooldownMs = FAILURE_COOLDOWN_MS } = options;
   const now = Date.now();
 
   let entry = memory.get(id) as CacheEntry<T> | undefined;
@@ -75,7 +88,7 @@ export async function cachedFetch<T>(
   // no hay nada servible se corta acá. El cooldown vale aunque nunca haya habido
   // dato: si no, durante una caída con cache frío cada visita golpea al upstream.
   const failedAt = lastFailureAt.get(id);
-  if (failedAt !== undefined && now - failedAt < FAILURE_COOLDOWN_MS) {
+  if (failedAt !== undefined && now - failedAt < failureCooldownMs) {
     if (usable) {
       return { data: usable.data, updatedAt: usable.updatedAt, stale: true };
     }
@@ -85,7 +98,7 @@ export async function cachedFetch<T>(
   try {
     // El timestamp lo pone quien resuelve el fetch, no cada request: así todas
     // las que comparten una consulta reportan la misma antigüedad real del dato.
-    const fresh = await dedupe(id, fetcher);
+    const fresh = await dedupe(id, fetcher, maxWaitMs);
     memory.set(id, fresh);
     lastFailureAt.delete(id);
     await writePersistent(id, fresh);
@@ -104,14 +117,49 @@ export async function cachedFetch<T>(
  * Sin esto, N visitas simultáneas al vencer el TTL disparaban N consultas — con
  * una URL pública eso alcanza para pasarse del límite de la API del inversor.
  */
-function dedupe<T>(id: string, fetcher: () => Promise<T>): Promise<CacheEntry<T>> {
-  const running = inFlight.get(id) as Promise<CacheEntry<T>> | undefined;
-  if (running) {
-    return running;
+function dedupe<T>(id: string, fetcher: () => Promise<T>, maxWaitMs: number): Promise<CacheEntry<T>> {
+  let running = inFlight.get(id) as Promise<CacheEntry<T>> | undefined;
+  if (!running) {
+    const started: Promise<CacheEntry<T>> = fetcher()
+      .then((data) => ({ data, updatedAt: Date.now() }))
+      .finally(() => {
+        // Solo si sigue siendo la consulta vigente: si venció el plazo y ya arrancó
+        // otra, borrarla acá dejaría a esa otra sin deduplicar.
+        if (inFlight.get(id) === started) inFlight.delete(id);
+      });
+    inFlight.set(id, started);
+    running = started;
   }
-  const started = fetcher()
-    .then((data) => ({ data, updatedAt: Date.now() }))
-    .finally(() => inFlight.delete(id));
-  inFlight.set(id, started);
-  return started;
+  return awaitWithDeadline(id, running, maxWaitMs);
+}
+
+/**
+ * Espera la consulta compartida con un plazo propio de la request que espera.
+ *
+ * La consulta la inicia una request; si el cliente de esa request corta la conexión
+ * (recarga del kiosk, corte de WiFi), Workers cancela su I/O: el fetch y su
+ * AbortSignal.timeout mueren con ella y la promesa queda pendiente para siempre.
+ * Compartida vía inFlight, dejaba a la fuente colgada para todas las requests
+ * siguientes hasta que se reciclara el isolate — así quedaron mudos clima y solar el
+ * 2026-09-19 con los upstreams sanos. Por eso el timer es de quien espera, no de
+ * quien inició, y al vencer la consulta se descarta para que la próxima vuelva a
+ * consultar. Una consulta lenta pero viva se corta igual: no hay forma de
+ * distinguirlas, y el costo es un reintento tras el cooldown.
+ */
+function awaitWithDeadline<T>(
+  id: string,
+  running: Promise<CacheEntry<T>>,
+  maxWaitMs: number,
+): Promise<CacheEntry<T>> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      if (inFlight.get(id) === running) inFlight.delete(id);
+      console.warn(`cache: consulta a ${id} sin respuesta en ${maxWaitMs} ms; se descarta`);
+      reject(new Error(`Consulta a ${id} sin respuesta en ${Math.round(maxWaitMs / 1000)} s`));
+    }, maxWaitMs);
+  });
+  return Promise.race([running, deadline]).finally(() => {
+    if (timer !== null) clearTimeout(timer);
+  });
 }

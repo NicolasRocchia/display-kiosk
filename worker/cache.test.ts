@@ -69,5 +69,40 @@ check(
   servido.stale === true && (servido.data as { valor: string }).valor === "bueno",
 );
 
+// --- Consulta colgada por un request cancelado ----------------------------
+// En Workers, si el cliente corta la conexión mientras se consulta el upstream,
+// el runtime cancela ese I/O y la promesa queda pendiente para siempre. Compartida
+// vía inFlight, colgaba a todas las requests siguientes de esa fuente hasta que se
+// reciclara el isolate: así quedaron mudos clima y solar el 2026-09-19.
+let arranques = 0;
+const colgado = () => {
+  arranques++;
+  return new Promise<{ valor: string }>(() => {});
+};
+const sano = async () => {
+  arranques++;
+  return { valor: "vivo" };
+};
+const plazoCorto = { maxWaitMs: 50, failureCooldownMs: 0 };
+
+const t0 = Date.now();
+const esperas = await Promise.allSettled([
+  cachedFetch("colgado", 60, colgado, plazoCorto),
+  cachedFetch("colgado", 60, colgado, plazoCorto),
+]);
+check(
+  "la espera sobre una consulta colgada vence en vez de bloquear",
+  esperas.every((r) => r.status === "rejected") && Date.now() - t0 < 1000,
+  `tardó ${Date.now() - t0} ms`,
+);
+check("mientras esperaban no se duplicó la consulta", arranques === 1, `arranques=${arranques}`);
+
+const recuperado = await cachedFetch("colgado", 60, sano, plazoCorto);
+check(
+  "descartada la colgada, la siguiente request vuelve al upstream y obtiene dato",
+  (recuperado.data as { valor: string }).valor === "vivo" && arranques === 2,
+  `arranques=${arranques}`,
+);
+
 console.log(fallos === 0 ? "\nTodo en verde." : `\n${fallos} test(s) en rojo.`);
 process.exit(fallos === 0 ? 0 : 1);
